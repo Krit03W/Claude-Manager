@@ -3,7 +3,9 @@
 #
 # usage: ds [-w] [-a TOOLRULE] [-m MODEL] [-t SECS] [-d DIR] "prompt"
 #   -w           allow file edits inside the current directory (and -d dirs).
-#                Default is read-only: Read/Grep/Glob + read-only shell commands.
+#                Default is read-only: Read (inside the working dirs) + ls/grep/wc.
+#                Commands with exec/write flags (find -exec, rg --pre, git --output)
+#                are not allowed; add a precise -a rule if a task really needs one.
 #   -a TOOLRULE  extra allowed tool rule, repeatable, e.g. -a "Bash(pytest:*)"
 #   -m MODEL     model id (default: DEEPSEEK_MODEL from the env file)
 #   -t SECS      max run time in seconds (default 900)
@@ -21,6 +23,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
 env_file="${DS_ENV_FILE:-$repo_root/.env}"
 [[ -f "$env_file" ]] || { echo "ds: env file not found: $env_file" >&2; exit 2; }
+# The env file holds an API key: keep it private to this user.
+if [[ -n "$(find "$env_file" -perm -044 2>/dev/null)" || -n "$(find "$env_file" -perm -004 2>/dev/null)" || -n "$(find "$env_file" -perm -040 2>/dev/null)" ]]; then
+  chmod 600 "$env_file" && echo "ds: tightened permissions on $env_file to 600" >&2
+fi
 # Read only the three DEEPSEEK_* keys; never echo them.
 while IFS='=' read -r k v; do
   case "$k" in DEEPSEEK_BASE_URL|DEEPSEEK_API_KEY|DEEPSEEK_MODEL)
@@ -47,9 +53,9 @@ if [[ -z "$prompt" && ! -t 0 ]]; then prompt="$(cat)"; fi
 [[ -n "$prompt" ]] || { echo "ds: no prompt given" >&2; exit 2; }
 [[ -n "${DEEPSEEK_BASE_URL:-}" && -n "$model" ]] || { echo "ds: DEEPSEEK_BASE_URL / DEEPSEEK_MODEL missing in $env_file" >&2; exit 2; }
 
-allowed=(Read Grep Glob
-  "Bash(ls:*)" "Bash(cat:*)" "Bash(head:*)" "Bash(tail:*)" "Bash(wc:*)" "Bash(find:*)"
-  "Bash(grep:*)" "Bash(rg:*)" "Bash(git status:*)" "Bash(git log:*)" "Bash(git diff:*)" "Bash(git show:*)")
+# Read is not listed: inside the working dirs it needs no rule, outside it is denied.
+# Only shell commands with no exec/write flags (no find, rg, git: see header).
+allowed=("Bash(ls:*)" "Bash(grep:*)" "Bash(wc:*)")
 if (( write )); then
   allowed+=(Edit Write MultiEdit); mode="acceptEdits"; disallowed=(WebFetch WebSearch)
 else
@@ -86,7 +92,7 @@ if ! jq -e . >/dev/null 2>&1 <<<"$out"; then
   echo "$out" | tail -20; grep -v "no stdin data" "$errf" | tail -20 >&2; echo "[ds] failed after ${secs}s (no JSON result)" >&2; exit 1
 fi
 
-logdir="$HOME/.local/state/ds"; mkdir -p "$logdir"
+logdir="$HOME/.local/state/ds"; mkdir -p -m 700 "$logdir"; touch "$logdir/calls.log"; chmod 600 "$logdir/calls.log"
 jq -c --arg ts "$(date '+%Y-%m-%d %H:%M:%S')" --arg cwd "$PWD" --arg mode "$([[ $write == 1 ]] && echo edit || echo read)" \
   --arg model "$model" --arg prompt "$prompt" --argjson secs "$secs" \
   '{ts:$ts, cwd:$cwd, mode:$mode, model:$model, status:(if .is_error then "ERROR" else "SUCCESS" end),

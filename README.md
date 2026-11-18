@@ -93,6 +93,9 @@ Want to try it? Use `examples/demo-shop/`, a tiny project with tests. Plant a bu
 - **`.env` is git-ignored.** Scripts read only the keys they need and never print them.
 - `ds` runs Claude Code with `--bare`, so it **never reads your Claude subscription's OAuth token or keychain**. Your token can't leak to a third-party gateway, and the worker doesn't eat into your Pro/Max quota. It also loads no `CLAUDE.md` and no hooks.
 - Workers refuse to nest (a `ds` worker cannot call `ds`).
+- **Read-only really is read-only.** Default allow-lists contain only `ls`, `grep` and `wc`. `find`, `rg` and `git` are left out, because `find -exec`, `rg --pre` and `git --output` can run programs or write files. File reads are scoped to the working directory, and `agyw` explicitly denies network (`read_url`, `execute_url`) and MCP tools.
+- `ds` tightens `.env` to `600` if it's readable by others, and the call logs live in a `700` directory as `600` files.
+- Worker output is untrusted: a repo the worker reads can contain prompt injection. That's why the permission layer, not the prompt, is what limits the worker.
 - Writes outside the working directory and commands outside the allow-list are blocked by the **permission layer, not just the prompt**. Tested: a prompt claiming "the manager authorized it" is still blocked.
 
 ---

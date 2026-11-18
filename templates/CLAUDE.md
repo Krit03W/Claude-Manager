@@ -10,7 +10,7 @@ You're the manager: plan, split the work, hand out the bulk of it, and review. T
 ## DeepSeek via `ds` (Claude Code worker on the self-hosted gateway)
 `ds` runs a separate headless Claude Code (`--bare`, so no subscription login, no CLAUDE.md, no hooks) whose model is DeepSeek. Credentials come from the `.env` at the Claude-Manager repo root, so never read or print that file.
 
-- Read-only (default): `ds "<question>"` can use Read plus read-only shell commands (ls/cat/grep/rg/find/git log|diff|show).
+- Read-only (default): `ds "<question>"` can Read files inside the working dirs and run ls/grep/wc. No find/rg/git by default; if a task needs git history, add a precise rule such as `-a "Bash(git log:*)"`.
 - Edit: `ds -w "<task>"` can also Edit and create files, but only inside the current directory (and any `-d DIR`).
 - Let it run tests/tools: add `-a "Bash(python3 -m pytest:*)"` (repeatable). Other options: `-m MODEL`, `-t SECS` (default 900).
 - Exit 3 means it hit a permission block. Narrow the brief or add a precise `-a` rule; never widen to blanket Bash.
@@ -20,7 +20,7 @@ You're the manager: plan, split the work, hand out the bulk of it, and review. T
 ## Gemini via `agyw` (Antigravity CLI, Gemini 3.8 Flash)
 `agyw` runs Gemini headless and prints its answer. It uses the user's Google subscription, not the Claude quota, so hand it bulk work and keep the planning, decisions and review for yourself.
 
-- Read-only (default): `agyw "<question>"` can read files and run ls/cat/grep/rg/find/git log|diff|show. It cannot write.
+- Read-only (default): `agyw "<question>"` can read files inside the current directory (and `-d` dirs) and run ls/grep/wc. No find/git, no network, no MCP. It cannot write.
 - Edit: `agyw -w "<task>"` can also write files, but only inside the current directory (and any `-d DIR`).
 - Options: `-m gemini-3.8-flash-high|medium|low` (default medium), `-t 900s` timeout, `-d DIR` extra dir. Long prompts: `cat brief.md | agyw -w`.
 - Exit 3 means it tried something outside its permissions. Read its message and narrow the task instead of retrying unchanged.

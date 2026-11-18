@@ -7,9 +7,10 @@
 #               override with $AGYW_MODEL)
 #   -t TIMEOUT  max run time, e.g. 300s (default 600s)
 #   -d DIR      extra directory to add to the workspace (repeatable; writable with -w)
-# Permissions: read_file anywhere + read-only shell commands (ls, cat, grep, rg,
-# find, head, tail, wc, git status/log/diff/show). With -w, write_file is allowed
-# only inside the current directory and -d dirs. Anything else is auto-denied.
+# Permissions: read_file and write_file (-w) only inside the current directory and
+# -d dirs; shell limited to ls/grep/wc; network (read_url, execute_url) and MCP
+# explicitly denied. Anything else is auto-denied in headless mode.
+# Commands with exec/write flags (find -exec, rg --pre, git --output) are not allowed.
 # Every call is logged to ~/.local/state/agyw/calls.log (view: agyw-log).
 # The prompt can also be piped on stdin: cat spec.md | agyw -w
 set -euo pipefail
@@ -38,23 +39,29 @@ prompt="${*:-}"
 if [[ -z "$prompt" && ! -t 0 ]]; then prompt="$(cat)"; fi
 [[ -n "$prompt" ]] || { echo "agyw: no prompt given" >&2; exit 2; }
 
+prompt+=$'\n\n(Tool rules: use your built-in file read, list and search tools. Avoid shell commands: only ls, grep and wc are allowed (use ls -R or grep -rl to locate files; find is blocked). No network access.)'
 # Plan mode otherwise tends to answer with an implementation plan instead of the answer.
 [[ "$mode" == "plan" ]] && prompt+=$'\n\n(Read-only task: answer directly. Do not write an implementation plan.)'
 
-allow='"read_file(*)"'
-for c in ls "ls *" "cat *" "grep *" "rg *" "find *" "head *" "tail *" "wc *" \
-         "git status*" "git log*" "git diff*" "git show*"; do
-  allow+=",\"command($c)\""
+# Build the permission JSON with jq so paths can't inject extra rules.
+allow=()
+for w in "${wdirs[@]}"; do
+  allow+=("read_file($w/**)")
+  [[ "$mode" == "accept-edits" ]] && allow+=("write_file($w/**)")
 done
-if [[ "$mode" == "accept-edits" ]]; then
-  for w in "${wdirs[@]}"; do allow+=",\"write_file($w/**)\""; done
-fi
-settings="{\"permissions\":{\"allow\":[$allow]}}"
+# Only commands with no exec/write flags. agy matches command(...) rules as a
+# word-by-word prefix, so command(grep) allows any grep invocation. find, rg and
+# git are deliberately absent: find -exec, rg --pre and git --output can run
+# programs or write files. Files are read with the read_file tool.
+allow+=("command(ls)" "command(grep)" "command(wc)")
+deny=("read_url(*)" "execute_url(*)" "mcp(*)")
+settings="$(jq -cn --args '{permissions:{allow:$ARGS.positional[:$n|tonumber], deny:$ARGS.positional[$n|tonumber:]}}' \
+  --arg n "${#allow[@]}" "${allow[@]}" "${deny[@]}")"
 
 out="$(agy -p "$prompt" --model "$model" --mode "$mode" \
   --output-format json --print-timeout "$timeout" --settings "$settings" ${dirs[@]+"${dirs[@]}"})"
 
-logdir="$HOME/.local/state/agyw"; mkdir -p "$logdir"
+logdir="$HOME/.local/state/agyw"; mkdir -p -m 700 "$logdir"; touch "$logdir/calls.log"; chmod 600 "$logdir/calls.log"
 jq -c --arg ts "$(date '+%Y-%m-%d %H:%M:%S')" --arg cwd "$PWD" --arg mode "$mode" \
   --arg model "$model" --arg prompt "$prompt" \
   '{ts:$ts, cwd:$cwd, mode:$mode, model:$model, status:.status, secs:(.duration_seconds|floor),
