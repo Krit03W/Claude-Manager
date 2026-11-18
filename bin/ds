@@ -42,7 +42,7 @@ while getopts "wa:m:t:d:h" opt; do
     m) model="$OPTARG" ;;
     t) timeout_s="$OPTARG" ;;
     d) dirs+=(--add-dir "$OPTARG") ;;
-    h) sed -n '2,15p' "$0"; exit 0 ;;
+    h) sed -n '2,17p' "$0"; exit 0 ;;
     *) exit 2 ;;
   esac
 done

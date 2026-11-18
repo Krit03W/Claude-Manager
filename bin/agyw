@@ -15,6 +15,8 @@
 # The prompt can also be piped on stdin: cat spec.md | agyw -w
 set -euo pipefail
 
+[[ -z "${AGYW_WORKER:-}" ]] || { echo "agyw: refusing to nest an agyw worker inside another" >&2; exit 2; }
+
 # agy matches write rules against the resolved path, so run from the physical cwd.
 cd "$(pwd -P)"
 mode="plan"
@@ -29,7 +31,7 @@ while getopts "wm:t:d:h" opt; do
     m) model="$OPTARG" ;;
     t) timeout="$OPTARG" ;;
     d) dirs+=(--add-dir "$OPTARG"); wdirs+=("$(cd "$OPTARG" && pwd -P)") ;;
-    h) sed -n '2,13p' "$0"; exit 0 ;;
+    h) sed -n '2,15p' "$0"; exit 0 ;;
     *) exit 2 ;;
   esac
 done
@@ -58,7 +60,7 @@ deny=("read_url(*)" "execute_url(*)" "mcp(*)")
 settings="$(jq -cn --args '{permissions:{allow:$ARGS.positional[:$n|tonumber], deny:$ARGS.positional[$n|tonumber:]}}' \
   --arg n "${#allow[@]}" "${allow[@]}" "${deny[@]}")"
 
-out="$(agy -p "$prompt" --model "$model" --mode "$mode" \
+out="$(AGYW_WORKER=1 agy -p "$prompt" --model "$model" --mode "$mode" \
   --output-format json --print-timeout "$timeout" --settings "$settings" ${dirs[@]+"${dirs[@]}"})"
 
 logdir="$HOME/.local/state/agyw"; mkdir -p -m 700 "$logdir"; touch "$logdir/calls.log"; chmod 600 "$logdir/calls.log"

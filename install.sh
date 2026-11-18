@@ -11,7 +11,7 @@ say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*"; }
 
 say "Checking dependencies"
-for c in claude jq perl; do command -v "$c" >/dev/null || warn "missing: $c"; done
+for c in claude jq perl curl; do command -v "$c" >/dev/null || warn "missing: $c"; done
 command -v agy >/dev/null || warn "agy (Antigravity CLI) not found — agyw will not work until it is installed and logged in"
 
 say "Linking commands into $bin_dir"

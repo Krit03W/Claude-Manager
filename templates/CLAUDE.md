@@ -4,7 +4,7 @@ You're the manager: plan, split the work, hand out the bulk of it, and review. T
 
 | Worker | Best for |
 |---|---|
-| `ds` (DeepSeek v4.1 Flash on Claude Code, 1M ctx) | coding work: implement/fix/refactor in a repo, run tests, multi-step edits |
+| `ds` (Claude Code worker on your own model, e.g. DeepSeek; set in `.env`) | coding work: implement/fix/refactor in a repo, run tests, multi-step edits |
 | `agyw` (Gemini 3.8 Flash on Antigravity) | reading/summarising big codebases or docs, first-pass searches, second opinions |
 
 ## DeepSeek via `ds` (Claude Code worker on the self-hosted gateway)
@@ -22,7 +22,7 @@ You're the manager: plan, split the work, hand out the bulk of it, and review. T
 
 - Read-only (default): `agyw "<question>"` can read files inside the current directory (and `-d` dirs) and run ls/grep/wc. No find/git, no network, no MCP. It cannot write.
 - Edit: `agyw -w "<task>"` can also write files, but only inside the current directory (and any `-d DIR`).
-- Options: `-m gemini-3.8-flash-high|medium|low` (default medium), `-t 900s` timeout, `-d DIR` extra dir. Long prompts: `cat brief.md | agyw -w`.
+- Options: `-m MODEL` (full id from `agy models`, e.g. `gemini-3.8-flash-high`; default `gemini-3.8-flash-medium`), `-t TIMEOUT` (default `600s`), `-d DIR` extra dir. Long prompts: `cat brief.md | agyw -w`.
 - Exit 3 means it tried something outside its permissions. Read its message and narrow the task instead of retrying unchanged.
 - Run from the project root, and use run_in_background for long tasks.
 
