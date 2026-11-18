@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# agyw — run Antigravity CLI (Gemini) headless as a worker for Claude Code.
+#
+# usage: agyw [-w] [-m MODEL] [-t TIMEOUT] [-d DIR] "prompt"
+#   -w          allow file edits (accept-edits mode). Default is read-only (plan mode).
+#   -m MODEL    model id from `agy models` (default: gemini-3.8-flash-medium,
+#               override with $AGYW_MODEL)
+#   -t TIMEOUT  max run time, e.g. 300s (default 600s)
+#   -d DIR      extra directory to add to the workspace (repeatable; writable with -w)
+# Permissions: read_file anywhere + read-only shell commands (ls, cat, grep, rg,
+# find, head, tail, wc, git status/log/diff/show). With -w, write_file is allowed
+# only inside the current directory and -d dirs. Anything else is auto-denied.
+# Every call is logged to ~/.local/state/agyw/calls.log (view: agyw-log).
+# The prompt can also be piped on stdin: cat spec.md | agyw -w
+set -euo pipefail
+
+# agy matches write rules against the resolved path, so run from the physical cwd.
+cd "$(pwd -P)"
+mode="plan"
+model="${AGYW_MODEL:-gemini-3.8-flash-medium}"
+timeout="600s"
+dirs=()
+wdirs=("$PWD")
+
+while getopts "wm:t:d:h" opt; do
+  case "$opt" in
+    w) mode="accept-edits" ;;
+    m) model="$OPTARG" ;;
+    t) timeout="$OPTARG" ;;
+    d) dirs+=(--add-dir "$OPTARG"); wdirs+=("$(cd "$OPTARG" && pwd -P)") ;;
+    h) sed -n '2,13p' "$0"; exit 0 ;;
+    *) exit 2 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+prompt="${*:-}"
+if [[ -z "$prompt" && ! -t 0 ]]; then prompt="$(cat)"; fi
+[[ -n "$prompt" ]] || { echo "agyw: no prompt given" >&2; exit 2; }
+
+# Plan mode otherwise tends to answer with an implementation plan instead of the answer.
+[[ "$mode" == "plan" ]] && prompt+=$'\n\n(Read-only task: answer directly. Do not write an implementation plan.)'
+
+allow='"read_file(*)"'
+for c in ls "ls *" "cat *" "grep *" "rg *" "find *" "head *" "tail *" "wc *" \
+         "git status*" "git log*" "git diff*" "git show*"; do
+  allow+=",\"command($c)\""
+done
+if [[ "$mode" == "accept-edits" ]]; then
+  for w in "${wdirs[@]}"; do allow+=",\"write_file($w/**)\""; done
+fi
+settings="{\"permissions\":{\"allow\":[$allow]}}"
+
+out="$(agy -p "$prompt" --model "$model" --mode "$mode" \
+  --output-format json --print-timeout "$timeout" --settings "$settings" ${dirs[@]+"${dirs[@]}"})"
+
+logdir="$HOME/.local/state/agyw"; mkdir -p "$logdir"
+jq -c --arg ts "$(date '+%Y-%m-%d %H:%M:%S')" --arg cwd "$PWD" --arg mode "$mode" \
+  --arg model "$model" --arg prompt "$prompt" \
+  '{ts:$ts, cwd:$cwd, mode:$mode, model:$model, status:.status, secs:(.duration_seconds|floor),
+    tokens:.usage.total_tokens, denied:[.denied_actions[]?.action], conversation:.conversation_id,
+    prompt:$prompt[0:400], response:(.response // "")[0:400]}' <<<"$out" >> "$logdir/calls.log" 2>/dev/null || true
+
+status="$(jq -r '.status // "UNKNOWN"' <<<"$out" 2>/dev/null || echo PARSE_ERROR)"
+if [[ "$status" == "PARSE_ERROR" ]]; then echo "$out"; exit 1; fi
+
+resp="$(jq -r '.response // ""' <<<"$out")"
+echo "$resp"
+jq -r '"[agyw] status=\(.status) model='"$model"' mode='"$mode"' time=\(.duration_seconds|floor)s tokens=\(.usage.total_tokens)"' <<<"$out" >&2
+[[ "$status" == "SUCCESS" ]] || exit 1
+# agy reports SUCCESS even when a tool was auto-denied; surface that as failure.
+denied="$(jq -r '[.denied_actions[]?.action] | unique | join(",")' <<<"$out")"
+if [[ -n "$denied" ]]; then echo "[agyw] DENIED actions: $denied (outside allowed scope)" >&2; exit 3; fi

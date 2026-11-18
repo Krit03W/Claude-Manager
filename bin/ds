@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# ds — run a Claude Code worker on DeepSeek (self-hosted gateway), headless.
+#
+# usage: ds [-w] [-a TOOLRULE] [-m MODEL] [-t SECS] [-d DIR] "prompt"
+#   -w           allow file edits inside the current directory (and -d dirs).
+#                Default is read-only: Read/Grep/Glob + read-only shell commands.
+#   -a TOOLRULE  extra allowed tool rule, repeatable, e.g. -a "Bash(pytest:*)"
+#   -m MODEL     model id (default: DEEPSEEK_MODEL from the env file)
+#   -t SECS      max run time in seconds (default 900)
+#   -d DIR       extra working directory (repeatable)
+# The prompt can also be piped on stdin: cat brief.md | ds -w
+# Credentials: $DS_ENV_FILE (default: .env at the Claude-Manager repo root) with
+#   DEEPSEEK_BASE_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL.
+# Runs `claude --bare`, so it never touches the Claude subscription login,
+# hooks or CLAUDE.md. Every call is logged to ~/.local/state/ds/calls.log (view: ds-log).
+set -euo pipefail
+
+[[ -z "${DS_WORKER:-}" ]] || { echo "ds: refusing to nest a ds worker inside another" >&2; exit 2; }
+
+# Default: the .env at the root of this repo (works through the install symlink).
+repo_root="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+env_file="${DS_ENV_FILE:-$repo_root/.env}"
+[[ -f "$env_file" ]] || { echo "ds: env file not found: $env_file" >&2; exit 2; }
+# Read only the three DEEPSEEK_* keys; never echo them.
+while IFS='=' read -r k v; do
+  case "$k" in DEEPSEEK_BASE_URL|DEEPSEEK_API_KEY|DEEPSEEK_MODEL)
+    v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"; printf -v "$k" '%s' "$v" ;;
+  esac
+done < <(grep -E '^(DEEPSEEK_BASE_URL|DEEPSEEK_API_KEY|DEEPSEEK_MODEL)=' "$env_file")
+
+write=0; model="${DEEPSEEK_MODEL:-}"; timeout_s=900; extra=(); dirs=()
+while getopts "wa:m:t:d:h" opt; do
+  case "$opt" in
+    w) write=1 ;;
+    a) extra+=("$OPTARG") ;;
+    m) model="$OPTARG" ;;
+    t) timeout_s="$OPTARG" ;;
+    d) dirs+=(--add-dir "$OPTARG") ;;
+    h) sed -n '2,15p' "$0"; exit 0 ;;
+    *) exit 2 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+prompt="${*:-}"
+if [[ -z "$prompt" && ! -t 0 ]]; then prompt="$(cat)"; fi
+[[ -n "$prompt" ]] || { echo "ds: no prompt given" >&2; exit 2; }
+[[ -n "${DEEPSEEK_BASE_URL:-}" && -n "$model" ]] || { echo "ds: DEEPSEEK_BASE_URL / DEEPSEEK_MODEL missing in $env_file" >&2; exit 2; }
+
+allowed=(Read Grep Glob
+  "Bash(ls:*)" "Bash(cat:*)" "Bash(head:*)" "Bash(tail:*)" "Bash(wc:*)" "Bash(find:*)"
+  "Bash(grep:*)" "Bash(rg:*)" "Bash(git status:*)" "Bash(git log:*)" "Bash(git diff:*)" "Bash(git show:*)")
+if (( write )); then
+  allowed+=(Edit Write MultiEdit); mode="acceptEdits"; disallowed=(WebFetch WebSearch)
+else
+  mode="default"; disallowed=(Edit Write MultiEdit NotebookEdit WebFetch WebSearch)
+fi
+allowed+=(${extra[@]+"${extra[@]}"})
+# --bare exposes only Bash, Read and Edit (new files are created via Bash in edit mode).
+if (( write )); then tools="Bash,Read,Edit"; else tools="Bash,Read"; fi
+
+sys="You are a worker agent run by a manager agent. Do exactly the task in the prompt, stay inside the working directory, and finish with a short report of what you did (files changed, anything you could not do). Do not ask questions; if blocked, say what blocked you."
+
+base="${DEEPSEEK_BASE_URL%/}"; base="${base%/v1}"
+start=$(date +%s)
+errf="$(mktemp)"; trap 'rm -f "$errf"' EXIT
+out="$(cd "$PWD" && env -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+  DS_WORKER=1 \
+  ANTHROPIC_BASE_URL="$base" \
+  ANTHROPIC_API_KEY="${DEEPSEEK_API_KEY:-none}" \
+  ANTHROPIC_MODEL="$model" \
+  ANTHROPIC_DEFAULT_OPUS_MODEL="$model" \
+  ANTHROPIC_DEFAULT_SONNET_MODEL="$model" \
+  ANTHROPIC_DEFAULT_HAIKU_MODEL="$model" \
+  CLAUDE_CODE_SUBAGENT_MODEL="$model" \
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+  DISABLE_TELEMETRY=1 \
+  perl -e 'alarm shift; exec @ARGV' "$timeout_s" claude --bare -p "$prompt" \
+    --model "$model" --tools "$tools" --output-format json --permission-mode "$mode" \
+    --append-system-prompt "$sys" \
+    --allowedTools "${allowed[@]}" --disallowedTools "${disallowed[@]}" \
+    ${dirs[@]+"${dirs[@]}"} </dev/null 2>"$errf")" || true
+secs=$(( $(date +%s) - start ))
+
+if ! jq -e . >/dev/null 2>&1 <<<"$out"; then
+  echo "$out" | tail -20; grep -v "no stdin data" "$errf" | tail -20 >&2; echo "[ds] failed after ${secs}s (no JSON result)" >&2; exit 1
+fi
+
+logdir="$HOME/.local/state/ds"; mkdir -p "$logdir"
+jq -c --arg ts "$(date '+%Y-%m-%d %H:%M:%S')" --arg cwd "$PWD" --arg mode "$([[ $write == 1 ]] && echo edit || echo read)" \
+  --arg model "$model" --arg prompt "$prompt" --argjson secs "$secs" \
+  '{ts:$ts, cwd:$cwd, mode:$mode, model:$model, status:(if .is_error then "ERROR" else "SUCCESS" end),
+    secs:$secs, turns:.num_turns, tokens:((.usage.input_tokens//0)+(.usage.output_tokens//0)),
+    denied:[.permission_denials[]?.tool_name], session:.session_id,
+    prompt:$prompt[0:400], response:((.result // "")|tostring)[0:400]}' <<<"$out" >> "$logdir/calls.log" 2>/dev/null || true
+
+jq -r '.result // ""' <<<"$out"
+jq -r --arg m "$model" --arg s "$secs" --arg mode "$([[ $write == 1 ]] && echo edit || echo read)" \
+  '"[ds] status=\(if .is_error then "ERROR" else "SUCCESS" end) model=\($m) mode=\($mode) time=\($s)s turns=\(.num_turns) tokens=\((.usage.input_tokens//0)+(.usage.output_tokens//0))"' <<<"$out" >&2
+
+[[ "$(jq -r '.is_error' <<<"$out")" != "true" ]] || exit 1
+denied="$(jq -r '[.permission_denials[]?.tool_name] | unique | join(",")' <<<"$out")"
+if [[ -n "$denied" ]]; then echo "[ds] DENIED tools: $denied (outside allowed scope)" >&2; exit 3; fi

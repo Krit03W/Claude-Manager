@@ -1,0 +1,20 @@
+# --- Secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials*.json
+
+# --- Local Claude Code state ---
+.claude/settings.local.json
+
+# --- Python / OS clutter ---
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.DS_Store
+*.bak-*
+*.log

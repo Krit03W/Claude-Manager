@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# agyw-log [N] — show the last N (default 10) Gemini worker calls made via agyw.
+log="$HOME/.local/state/agyw/calls.log"
+[[ -f "$log" ]] || { echo "no agyw calls logged yet"; exit 0; }
+tail -n "${1:-10}" "$log" | jq -r --arg home "$HOME" '"\(.ts)  \(.mode)  \(.model)  \(.status)  \(.secs)s  \(.tokens) tok  \(if (.denied|length)>0 then "DENIED:"+(.denied|join(",")) else "" end)\n  dir: \(.cwd|sub("^"+$home;"~")|split("/")|if length>3 then "…/"+(.[-2:]|join("/")) else join("/") end)\n  ask: \(.prompt|gsub("\n";" ")|.[0:160])\n  ans: \(.response|gsub("\n";" ")|.[0:160])\n"'

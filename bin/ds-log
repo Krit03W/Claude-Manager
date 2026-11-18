@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# ds-log [N] — show the last N (default 10) DeepSeek worker calls made via ds.
+log="$HOME/.local/state/ds/calls.log"
+[[ -f "$log" ]] || { echo "no ds calls logged yet"; exit 0; }
+tail -n "${1:-10}" "$log" | jq -r --arg home "$HOME" '"\(.ts)  \(.mode)  \(.model)  \(.status)  \(.secs)s  \(.tokens) tok  \(.turns) turns  \(if (.denied|length)>0 then "DENIED:"+(.denied|join(",")) else "" end)\n  dir: \(.cwd|sub("^"+$home;"~")|split("/")|if length>3 then "…/"+(.[-2:]|join("/")) else join("/") end)\n  ask: \(.prompt|gsub("\n";" ")|.[0:160])\n  ans: \(.response|gsub("\n";" ")|.[0:160])\n"'
