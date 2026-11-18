@@ -1,151 +1,160 @@
-# Claude-Manager
+<p align="center">
+  <img src="assets/banner.svg" alt="Claude-Manager: Claude Code as the manager, delegating to DeepSeek, Gemini and any other AI CLI as workers" width="100%">
+</p>
 
-ให้ **Claude Code (Opus) เป็นผู้จัดการ** แล้วสั่งงาน **AI ตัวอื่นที่คุณมี subscription หรือ host เองอยู่แล้ว** ให้เป็นลูกน้อง
-Opus วางแผน แตกงาน ส่งงาน และรีวิว ส่วนลูกน้องลงมือทำงานหนักแทน จึงประหยัดโควตา Claude และได้ใช้ subscription ที่จ่ายเงินไว้แต่ไม่ค่อยได้ใช้
-
-```
-            ┌──────────────── Claude Code (Opus) = manager ────────────────┐
-            │  วางแผน → เขียน brief → เรียก worker ผ่าน Bash → ตรวจ diff/เทสต์   │
-            └──────┬─────────────────────────────┬──────────────────────────┘
-                   │ ds -w "brief"                │ agyw "brief"
-        ┌──────────▼───────────┐       ┌──────────▼────────────┐
-        │ Claude Code --bare    │       │ Antigravity CLI (agy)  │
-        │ model = DeepSeek ฯลฯ  │       │ model = Gemini         │
-        │ (API gateway ของคุณ)  │       │ (Google subscription)  │
-        └───────────────────────┘       └────────────────────────┘
-```
-
-Worker แต่ละตัวเป็นแค่ **shell script ตัวเล็ก ๆ** ที่ห่อ CLI แบบ headless ไว้ หน้าที่ของสคริปต์คือ
-- รับ prompt แล้วรัน CLI แบบไม่โต้ตอบ (`-p` / `exec`)
-- **จำกัดสิทธิ์:** ค่าเริ่มต้นเป็นอ่านอย่างเดียว ใส่ `-w` ถึงจะแก้ไฟล์ได้ และแก้ได้แค่ในโฟลเดอร์ที่รันอยู่
-- คืน exit code ที่ manager นำไปใช้ต่อได้ (`3` = โดนบล็อกสิทธิ์) และเขียน log ทุกครั้งที่เรียก
+<p align="center">
+  <b>Make Claude Code (Opus) the manager. Let your other AI subscriptions and self-hosted models do the legwork.</b>
+</p>
 
 ---
 
-## Worker ที่มีให้
+Claude-Manager turns Claude Code into a **team lead**: Opus plans, splits the work, writes briefs, hands the heavy lifting to **worker agents** running on *other* models, then reviews the result.
+You save Claude quota and finally put the subscriptions you already pay for (or the models you host yourself) to work.
 
-| คำสั่ง | ทำงานบน | เหมาะกับ |
+```
+           ┌──────────────── Claude Code (Opus) = manager ────────────────┐
+           │   plan → write brief → call worker via Bash → check diff/tests │
+           └──────┬─────────────────────────────┬──────────────────────────┘
+                  │ ds -w "brief"                │ agyw "brief"
+       ┌──────────▼───────────┐       ┌──────────▼────────────┐
+       │ Claude Code --bare    │       │ Antigravity CLI (agy)  │
+       │ model = DeepSeek, …   │       │ model = Gemini         │
+       │ (your API gateway)    │       │ (Google subscription)  │
+       └───────────────────────┘       └────────────────────────┘
+```
+
+Each worker is just a **small shell script** that wraps a headless CLI and:
+- runs the prompt non-interactively (`-p` / `exec`)
+- **limits permissions**: read-only by default; `-w` allows edits, and only inside the current directory
+- returns exit codes the manager can act on (`3` = blocked by permissions) and logs every call
+
+---
+
+## Workers included
+
+| Command | Runs on | Good for |
 |---|---|---|
-| `ds` | Claude Code `--bare` ที่ชี้ไปยัง endpoint แบบ Anthropic (`/v1/messages`) ของคุณ เช่น DeepSeek ที่ host เอง, LiteLLM, OpenRouter | เขียนหรือแก้โค้ด, refactor, รันเทสต์ |
-| `agyw` | [Antigravity CLI](https://antigravity.google) (`agy`) ใช้ subscription Google AI Pro/Ultra | อ่านหรือสรุป codebase และเอกสารใหญ่ ๆ, ค้นหาเบื้องต้น, ขอความเห็นที่สอง |
-| `ds-log`, `agyw-log` | — | ดูประวัติว่า manager สั่งอะไร ใครตอบอะไร ใช้ไปกี่ token |
+| `ds` | Claude Code `--bare` pointed at any **Anthropic-compatible** endpoint (`/v1/messages`): self-hosted DeepSeek, LiteLLM, OpenRouter, … | writing and fixing code, refactors, running tests |
+| `agyw` | [Antigravity CLI](https://antigravity.google) (`agy`) with a Google AI Pro/Ultra subscription | reading or summarising large codebases and docs, first-pass searches, second opinions |
+| `ds-log`, `agyw-log` | — | an audit trail of what the manager asked, what came back, and the tokens it took |
 
-## ติดตั้ง
+## Install
 
-ต้องมี `claude` (Claude Code), `jq`, `perl` และถ้าจะใช้ `agyw` ต้องมี `agy` ที่ login แล้วด้วย
+Requires `claude` (Claude Code), `jq` and `perl`. For `agyw`, you also need `agy`, logged in.
 
 ```bash
-git clone https://github.com/<you>/Claude-Manager.git ~/Projects/Claude-Manager
+git clone https://github.com/Krit03W/Claude-Manager.git ~/Projects/Claude-Manager
 cd ~/Projects/Claude-Manager
 ./install.sh
 ```
 
-`install.sh` จะทำสามอย่าง
-1. ลิงก์ `bin/*` ไปไว้ที่ `~/.local/bin`
-2. สร้างไฟล์ `.env` จาก `.env.example` (เฉพาะกรณีที่ยังไม่มี)
-3. เพิ่มกติกาการแบ่งงาน (`templates/CLAUDE.md`) ต่อท้าย `~/.claude/CLAUDE.md` เพื่อให้ Opus รู้ว่ามีลูกน้องตัวไหนบ้างและควรส่งงานแบบไหนให้
+`install.sh` will:
+1. symlink `bin/*` into `~/.local/bin`
+2. create `.env` from `.env.example` (only if it doesn't exist)
+3. append the manager playbook (`templates/CLAUDE.md`) to `~/.claude/CLAUDE.md`, so Opus knows which workers exist and what to send them
 
-**ขั้นที่ต้องทำเองหนึ่งอย่าง:** เพิ่ม rule พวกนี้ใน `"permissions" → "allow"` ของ `~/.claude/settings.json` ไม่อย่างนั้น Claude จะถามขออนุญาตทุกครั้งที่เรียกลูกน้อง
+**One manual step:** add these to `"permissions" → "allow"` in `~/.claude/settings.json`. Otherwise Claude asks for approval every time it calls a worker.
 
 ```json
 "Bash(ds *)", "Bash(agyw *)", "Bash(ds-log*)", "Bash(agyw-log*)"
 ```
 
-### ตั้งค่า `ds`
-ใส่ค่าลงใน `.env` แล้วรันตัวทดสอบ ตัวทดสอบจะไม่แสดง key ออกมา
+### Configure `ds`
+Fill in `.env`, then run the checker (it never prints your key):
 
 ```bash
-./scripts/ds-check.sh models     # ดูรายชื่อโมเดลที่ใช้ได้
-./scripts/ds-check.sh            # ทดสอบ /chat/completions และ /v1/messages
+./scripts/ds-check.sh models     # list available chat models
+./scripts/ds-check.sh            # test /chat/completions and /v1/messages
 ```
 
-`ds` ต้องใช้ endpoint ที่รับ **Anthropic Messages API** (`/v1/messages`) ถ้าเซิร์ฟเวอร์ของคุณรับได้แค่แบบ OpenAI ให้ตั้ง [LiteLLM proxy](https://docs.litellm.ai/) คั่นไว้ข้างหน้า
+`ds` needs an endpoint that speaks the **Anthropic Messages API** (`/v1/messages`). If your server only speaks the OpenAI format, put a [LiteLLM proxy](https://docs.litellm.ai/) in front of it.
 
-### ตั้งค่า `agyw`
-ติดตั้ง Antigravity CLI แล้วรัน `agy` หนึ่งครั้งเพื่อ login ด้วยบัญชี Google จากนั้นใช้ `agy models` ดูรายชื่อโมเดลที่บัญชีคุณใช้ได้
+### Configure `agyw`
+Install the Antigravity CLI, run `agy` once and sign in with your Google account. Then `agy models` shows which models your plan includes.
 
-## ใช้งาน
+## Usage
 
-ปกติคุณแค่สั่ง Claude ตามปกติ Opus จะเลือกส่งงานเองตามกติกาใน `CLAUDE.md` หรือจะสั่งตรง ๆ ก็ได้ เช่น *"ให้ DeepSeek แก้บั๊กใน cart.py แล้วรันเทสต์"*
+Normally you just talk to Claude. Opus decides when to delegate, following the playbook in `CLAUDE.md`. You can also ask directly, e.g. *"Have DeepSeek fix the failing test in cart.py."*
 
 ```bash
-ds "อ่าน src/ แล้วสรุปโครงสร้าง ≤15 บรรทัด"                    # อ่านอย่างเดียว
-ds -w -a "Bash(python3 -m pytest:*)" "แก้เทสต์ที่ fail ใน cart.py"   # แก้ไฟล์ + รันเทสต์ได้
-agyw "หาไฟล์ที่เรียก API ภายนอกทั้งหมด ตอบเป็น file:line"         # อ่านอย่างเดียว
-agyw -w -m gemini-3.8-flash-high "เขียน docstring ให้ทุกฟังก์ชันใน utils.py"
-ds-log 5                                                      # ดูการเรียก 5 ครั้งล่าสุด
+ds "Read src/ and summarise the architecture in ≤15 lines"                 # read-only
+ds -w -a "Bash(python3 -m pytest:*)" "Fix the failing test in cart.py"      # edit + run tests
+agyw "Find every call to an external API. Answer as file:line only"         # read-only
+agyw -w -m gemini-3.8-flash-high "Add docstrings to every function in utils.py"
+ds-log 5                                                                    # last 5 calls
 ```
 
-ลองเล่นกับ `examples/demo-shop/` ได้ เป็นโปรเจกต์เล็ก ๆ ที่มีเทสต์ไว้ให้ ลองใส่บั๊กเอง แล้วสั่ง Claude ให้ส่งงานแก้ให้ลูกน้อง
+Want to try it? Use `examples/demo-shop/`, a tiny project with tests. Plant a bug and ask Claude to have a worker fix it.
 
-**วิธีเช็กว่าลูกน้องทำงานจริง:** ทุกครั้งที่เรียก worker จะพิมพ์บรรทัด `[ds] status=… model=… tokens=…` ออกมาให้เห็นใน transcript ของ Claude และบันทึกลง `~/.local/state/<worker>/calls.log` ด้วย
+**How do I know a worker really did the work?** Every call prints `[ds] status=… model=… tokens=…` into Claude's transcript and appends a line to `~/.local/state/<worker>/calls.log`.
 
-## ความปลอดภัย
+## Safety
 
-- **`.env` ไม่ขึ้น git** (มีใน `.gitignore` แล้ว) สคริปต์อ่านเฉพาะ key ที่ต้องใช้ และไม่ print ค่าออกมา
-- `ds` รัน Claude Code ด้วย `--bare` จึง **ไม่อ่าน OAuth/keychain ของ subscription Claude** token ของคุณไม่หลุดไปที่ gateway ของคนอื่น และไม่ใช้โควตา Pro/Max ไปด้วย นอกจากนี้ worker ไม่โหลด `CLAUDE.md` หรือ hooks
-- Worker ทุกตัวกันการเรียกซ้อนกันเอง (`ds` สั่ง `ds` ต่อไม่ได้)
-- ถ้าลูกน้องพยายามเขียนไฟล์นอกโฟลเดอร์ หรือรันคำสั่งที่ไม่ได้อนุญาต จะโดนบล็อกที่ระดับ permission ไม่ได้พึ่งแค่ prompt ทดสอบแล้วว่า แม้ prompt จะอ้างว่า "manager อนุญาตแล้ว" ก็ยังโดนบล็อก
+- **`.env` is git-ignored.** Scripts read only the keys they need and never print them.
+- `ds` runs Claude Code with `--bare`, so it **never reads your Claude subscription's OAuth token or keychain**. Your token can't leak to a third-party gateway, and the worker doesn't eat into your Pro/Max quota. It also loads no `CLAUDE.md` and no hooks.
+- Workers refuse to nest (a `ds` worker cannot call `ds`).
+- Writes outside the working directory and commands outside the allow-list are blocked by the **permission layer, not just the prompt**. Tested: a prompt claiming "the manager authorized it" is still blocked.
 
 ---
 
-## เพิ่ม AI subscription ตัวอื่นเป็นลูกน้อง
+## Adding another AI subscription as a worker
 
-หลักการเดียวกันใช้ได้กับ **AI coding CLI ทุกตัวที่มีโหมด headless** ไม่ว่าจะเป็น subscription ที่คุณจ่ายไว้แต่ไม่ค่อยได้ใช้ หรือโมเดลที่ host เอง
+The same pattern works for **any AI coding CLI with a headless mode**: subscriptions you pay for but rarely use, or models you host yourself.
 
-### กฎเหล็ก: ใช้ผ่าน CLI ทางการของผู้ให้บริการเท่านั้น
-Subscription แบบรายเดือน (Claude Pro/Max, ChatGPT Plus/Pro, Google AI Pro ฯลฯ) **ไม่ใช่ API key** ถ้าดึง OAuth token ของ CLI ไปทำเป็น endpoint `/v1/chat/completions` ให้แอปอื่นเรียก มักผิดเงื่อนไขการใช้งานและเสี่ยงโดนระงับบัญชี
-วิธีที่ปลอดภัยคือให้ manager **เรียก CLI ทางการของผู้ให้บริการแบบ headless** บนเครื่องของคุณเอง แบบที่ repo นี้ทำ ถ้าต้องการเรียกผ่าน API จริง ๆ ให้ใช้ API key ที่คิดเงินแยก
+### Ground rule: use the provider's official CLI
+A consumer subscription (Claude Pro/Max, ChatGPT Plus/Pro, Google AI Pro, …) is **not an API key**. Extracting a CLI's OAuth token and re-exposing it as a `/v1/chat/completions` endpoint for other apps usually violates the terms and can get the account suspended.
+The safe route is the one this repo takes: the manager **calls the provider's official CLI headlessly** on your own machine. If you need real API access, use a separately billed API key.
 
-เงื่อนไขของแต่ละเจ้าเปลี่ยนได้ตลอด ตัวอย่างเช่น ตั้งแต่ 18 มิ.ย. 2026 Gemini CLI เลิกรองรับบัญชี Google AI Pro/Ultra แล้ว ต้องย้ายไปใช้ Antigravity CLI แทน **อ่านเงื่อนไขล่าสุดของเจ้านั้น ๆ ก่อนตั้งค่าทุกครั้ง**
+Terms change. For example, since 2026-06-18, Gemini CLI no longer serves Google AI Pro/Ultra accounts; those moved to the Antigravity CLI. **Check the provider's current terms before you wire anything up.**
 
-### 3 รูปแบบที่ใช้ได้
+### Three patterns
 
-| รูปแบบ | ใช้เมื่อ | ตัวอย่างใน repo |
+| Pattern | Use when | Example here |
 |---|---|---|
-| **A. ห่อ CLI ของผู้ให้บริการ** | มี subscription ที่มาพร้อม CLI ของตัวเอง | `agyw` (Antigravity) |
-| **B. Claude Code + เปลี่ยน backend** | มี endpoint แบบ Anthropic เช่น โมเดลที่ host เอง, LiteLLM, OpenRouter, หรือผู้ให้บริการที่มี Anthropic-compatible API | `ds` |
-| **C. MCP server** | อยากให้ลูกน้องเป็น *tool* ที่สร้างข้อความอย่างเดียว ไม่ต้องแตะไฟล์ | — |
+| **A. Wrap the provider's CLI** | your subscription comes with its own agent CLI | `agyw` (Antigravity) |
+| **B. Claude Code with a swapped backend** | you have an Anthropic-compatible endpoint: self-hosted model, LiteLLM, OpenRouter, or a provider with an Anthropic-compatible API | `ds` |
+| **C. MCP server** | you only want text generation as a *tool*, with no file access | — |
 
-แบบ A และ B ดีกว่าแบบ C สำหรับงานโค้ด เพราะลูกน้องอ่านและแก้ไฟล์ได้เอง ผลลัพธ์ที่ไหลกลับเข้า context ของ Opus ก็มีแค่รายงานสั้น ๆ
+For coding work, A and B beat C: the worker reads and edits files itself, and only a short report flows back into Opus's context.
 
-### ขั้นตอนเพิ่มลูกน้องใหม่ (แบบ A)
+### Steps to add a worker (pattern A)
 
-1. ติดตั้งและ login CLI ของผู้ให้บริการตามวิธีทางการ
-2. หา flag ที่ต้องใช้ด้วย `<cli> --help`
-   - โหมดไม่โต้ตอบ (`-p`, `--print`, `exec`, `run` …)
-   - โหมดอ่านอย่างเดียว / plan / sandbox read-only
-   - โหมด auto-accept edit ที่จำกัดอยู่ในโฟลเดอร์ปัจจุบัน
-   - เลือกโมเดล และให้ output เป็น JSON ถ้าทำได้
-3. `cp templates/worker-template.sh bin/<ชื่อ>` แล้วแก้ส่วน TODO (ดู `bin/agyw` เป็นตัวอย่างที่ใช้งานได้จริง)
-4. **ทดสอบ 4 กรณีก่อนใช้จริง:** อ่านได้ / แก้ไฟล์ได้เมื่อใส่ `-w` / เขียนไม่ได้เมื่อไม่ใส่ `-w` / เขียนนอกโฟลเดอร์ไม่ได้
-5. `./install.sh` เพื่อลิงก์คำสั่ง แล้วเพิ่มหัวข้อของลูกน้องตัวใหม่ใน `~/.claude/CLAUDE.md` ว่าเก่งเรื่องอะไรและใช้ยังไง จากนั้นเพิ่ม `"Bash(<ชื่อ> *)"` ใน permissions
+1. Install and sign in to the provider's CLI the official way.
+2. Find the flags you need with `<cli> --help`:
+   - non-interactive mode (`-p`, `--print`, `exec`, `run`, …)
+   - read-only / plan / read-only sandbox mode
+   - auto-accept edits, scoped to the current directory
+   - model selection and, ideally, JSON output
+3. `cp templates/worker-template.sh bin/<name>` and fill in the TODOs. `bin/agyw` is a complete working example.
+4. **Test 4 cases before trusting it:** it can read / it can edit with `-w` / it cannot write without `-w` / it cannot write outside the directory.
+5. Run `./install.sh` to link it. Add a section for it to `~/.claude/CLAUDE.md` (what it's good at, how to call it), and add `"Bash(<name> *)"` to your permissions.
 
-### ไอเดีย CLI ที่อาจมีอยู่แล้ว
-ตรวจ flag จริงด้วย `--help` ทุกครั้ง เพราะแต่ละตัวอัปเดตบ่อย
+### CLIs you may already have
+Always confirm the flags with `--help`; these tools change often.
 
-| Subscription | CLI | สิ่งที่ต้องหา |
+| Subscription | CLI | Look for |
 |---|---|---|
-| ChatGPT Plus/Pro | OpenAI Codex CLI | คำสั่ง headless (`codex exec`), ตัวเลือก sandbox แบบอ่านอย่างเดียว / เขียนได้ใน workspace |
-| GitHub Copilot | Copilot CLI | โหมด non-interactive และการอนุญาต tool |
-| Cursor | Cursor CLI | โหมด print/headless |
-| Kimi, Qwen, GLM ฯลฯ | CLI ของแต่ละเจ้า หรือ endpoint แบบ Anthropic | ถ้ามี Anthropic-compatible API ใช้แบบ B ได้เลย แค่คัดลอก `bin/ds` แล้วเปลี่ยน `.env` |
+| ChatGPT Plus/Pro | OpenAI Codex CLI | headless command (`codex exec`), read-only vs workspace-write sandbox |
+| GitHub Copilot | Copilot CLI | non-interactive mode, tool allow-listing |
+| Cursor | Cursor CLI | print/headless mode |
+| Kimi, Qwen, GLM, … | the vendor's CLI, or an Anthropic-compatible endpoint | if it has an Anthropic-compatible API, use pattern B: copy `bin/ds` and point `.env` at it |
 
-### เคล็ดลับให้ manager สั่งงานได้ดี (มีใน `templates/CLAUDE.md` แล้ว)
-- ลูกน้องไม่เห็นบทสนทนาของคุณ brief ต้องครบในตัว บอกเป้าหมาย ไฟล์ ข้อห้าม และเกณฑ์ว่าเสร็จ
-- สั่งให้ตอบสั้น หรือให้เขียนผลลงไฟล์ จะได้ไม่เปลือง context ของ Opus
-- ห้ามให้ลูกน้องสองตัวแก้ไฟล์เดียวกันพร้อมกัน
-- Opus ต้องตรวจ diff และรันเทสต์เองทุกครั้ง ห้ามเชื่อแค่คำว่า "done"
+### Tips for a good manager (already in `templates/CLAUDE.md`)
+- Workers can't see your conversation. Briefs must be self-contained: goal, files, constraints, definition of done.
+- Ask for short answers, or have results written to a file, to keep Opus's context lean.
+- Never let two workers edit the same files at the same time.
+- Opus checks the diff and runs the tests itself. Never accept a bare "done".
 
-## โครงสร้าง repo
+## Repo layout
 
 ```
-bin/           คำสั่ง worker (ds, agyw) + ตัวดู log
-scripts/       ds-check.sh — ทดสอบ endpoint โดยไม่แสดง key
-templates/     CLAUDE.md (กติกาของ manager), worker-template.sh
-examples/      demo-shop — โปรเจกต์เล็ก ๆ ไว้ทดลองสั่งงาน
-install.sh     ติดตั้ง/อัปเดต
-.env.example   ตัวอย่างค่าที่ต้องใส่ (ไฟล์ .env จริงไม่ขึ้น git)
+assets/        banner image
+bin/           worker commands (ds, agyw) + log viewers
+scripts/       ds-check.sh: test an endpoint without printing the key
+templates/     CLAUDE.md (manager playbook), worker-template.sh
+examples/      demo-shop: a tiny project to practise delegating on
+install.sh     install / update
+.env.example   settings to fill in (the real .env never goes to git)
 ```
 
 ## License

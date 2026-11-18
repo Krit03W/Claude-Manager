@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14110f"/>
+      <stop offset="1" stop-color="#231a15"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#d97757" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#d97757" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.035"/>
+    </pattern>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <style>
+      .link { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 12; animation: flow 1.2s linear infinite; }
+      .ret  { fill: none; stroke-width: 2; stroke-opacity: .35; stroke-dasharray: 1 9; animation: flow 1.6s linear infinite reverse; }
+      @keyframes flow { to { stroke-dashoffset: -28; } }
+      .blink { animation: blink 4s infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+      .pulse { animation: pulse 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+      .title { font-weight: 800; letter-spacing: -1px; }
+      .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+
+  <!-- Title -->
+  <text x="80" y="118" class="title" font-size="72" fill="#f5efe9">Claude<tspan fill="#d97757">-</tspan>Manager</text>
+  <text x="82" y="164" font-size="26" fill="#bfb3a8">One manager. Many AI workers.</text>
+  <text x="82" y="200" font-size="18" fill="#8a7d72" class="mono">plan → delegate → review</text>
+
+  <!-- Links: manager → workers (brief) and back (report) -->
+  <g>
+    <path class="link" stroke="#7aa2ff" d="M915 312 C 840 350, 330 340, 260 420"/>
+    <path class="link" stroke="#b99bff" d="M960 312 C 945 360, 660 350, 640 420"/>
+    <path class="link" stroke="#6fd3a8" d="M1005 312 C 1020 360, 1010 370, 1020 420"/>
+    <path class="ret" stroke="#f5efe9" d="M300 420 C 380 350, 850 345, 925 316"/>
+    <path class="ret" stroke="#f5efe9" d="M680 420 C 700 360, 950 355, 972 316"/>
+  </g>
+
+  <!-- Manager -->
+  <g transform="translate(960 170)">
+    <circle r="150" fill="url(#glow)" class="pulse"/>
+    <g filter="url(#soft)">
+      <rect x="-92" y="-78" width="184" height="150" rx="34" fill="#d97757"/>
+      <rect x="-70" y="-52" width="140" height="78" rx="20" fill="#2a1e18"/>
+      <g class="blink">
+        <rect x="-42" y="-30" width="20" height="30" rx="8" fill="#f5efe9"/>
+        <rect x="22" y="-30" width="20" height="30" rx="8" fill="#f5efe9"/>
+      </g>
+      <path d="M-14 40 Q0 50 14 40" stroke="#2a1e18" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <!-- antenna -->
+      <line x1="0" y1="-78" x2="0" y2="-104" stroke="#d97757" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="0" cy="-110" r="10" fill="#f5efe9" class="pulse"/>
+      <!-- clipboard -->
+      <g transform="translate(108 -6) rotate(10)">
+        <rect x="-26" y="-34" width="52" height="68" rx="8" fill="#f5efe9"/>
+        <rect x="-12" y="-40" width="24" height="12" rx="4" fill="#8a7d72"/>
+        <path d="M-14 -12 l5 5 9 -10 M-14 4 l5 5 9 -10" stroke="#3a9a6a" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="4" y1="20" x2="16" y2="20" stroke="#bfb3a8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="-14" y1="20" x2="-2" y2="20" stroke="#bfb3a8" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </g>
+    <text y="104" text-anchor="middle" font-size="20" font-weight="700" fill="#f5efe9">Claude Code · Opus</text>
+    <text y="128" text-anchor="middle" font-size="15" fill="#bfb3a8" class="mono">manager</text>
+  </g>
+
+  <!-- Worker template -->
+  <!-- DeepSeek worker -->
+  <g transform="translate(260 500)" filter="url(#soft)">
+    <rect x="-150" y="-80" width="300" height="160" rx="26" fill="#1d2433" stroke="#7aa2ff" stroke-opacity=".6" stroke-width="2"/>
+    <rect x="-128" y="-58" width="64" height="56" rx="16" fill="#7aa2ff"/>
+    <rect x="-112" y="-42" width="10" height="16" rx="4" fill="#1d2433" class="blink"/>
+    <rect x="-90" y="-42" width="10" height="16" rx="4" fill="#1d2433" class="blink"/>
+    <text x="-48" y="-36" font-size="24" font-weight="800" fill="#f5efe9" class="mono">ds</text>
+    <text x="-48" y="-10" font-size="16" fill="#9fb6e8">DeepSeek · self-hosted</text>
+    <text x="-128" y="30" font-size="15" fill="#c9d4ee" class="mono">$ ds -w "fix failing test"</text>
+    <text x="-128" y="56" font-size="14" fill="#6fd3a8" class="mono">✓ edited cart.py · 4 passed</text>
+  </g>
+
+  <!-- Gemini worker -->
+  <g transform="translate(640 500)" filter="url(#soft)">
+    <rect x="-150" y="-80" width="300" height="160" rx="26" fill="#241d33" stroke="#b99bff" stroke-opacity=".6" stroke-width="2"/>
+    <rect x="-128" y="-58" width="64" height="56" rx="16" fill="#b99bff"/>
+    <rect x="-112" y="-42" width="10" height="16" rx="4" fill="#241d33" class="blink"/>
+    <rect x="-90" y="-42" width="10" height="16" rx="4" fill="#241d33" class="blink"/>
+    <text x="-48" y="-36" font-size="24" font-weight="800" fill="#f5efe9" class="mono">agyw</text>
+    <text x="-48" y="-10" font-size="16" fill="#cbb9f2">Gemini · subscription</text>
+    <text x="-128" y="30" font-size="15" fill="#ddd2f5" class="mono">$ agyw "summarise repo"</text>
+    <text x="-128" y="56" font-size="14" fill="#6fd3a8" class="mono">✓ 12 lines · read-only</text>
+  </g>
+
+  <!-- Your next worker -->
+  <g transform="translate(1020 500)">
+    <rect x="-150" y="-80" width="300" height="160" rx="26" fill="#18221d" stroke="#6fd3a8" stroke-opacity=".7" stroke-width="2" stroke-dasharray="10 8"/>
+    <rect x="-128" y="-58" width="64" height="56" rx="16" fill="none" stroke="#6fd3a8" stroke-width="3" stroke-dasharray="6 6"/>
+    <text x="-96" y="-18" text-anchor="middle" font-size="34" font-weight="800" fill="#6fd3a8">+</text>
+    <text x="-48" y="-36" font-size="24" font-weight="800" fill="#f5efe9" class="mono">your-cli</text>
+    <text x="-48" y="-10" font-size="16" fill="#a7dcc4">any headless AI CLI</text>
+    <text x="-128" y="30" font-size="15" fill="#cfe9dc" class="mono">Codex · Copilot · Kimi …</text>
+    <text x="-128" y="56" font-size="14" fill="#8a7d72" class="mono">templates/worker-template.sh</text>
+  </g>
+</svg>
