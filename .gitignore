@@ -18,3 +18,6 @@ __pycache__/
 .DS_Store
 *.bak-*
 *.log
+
+# --- Personal files (never published) ---
+personal/
